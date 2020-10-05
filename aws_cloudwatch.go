@@ -400,7 +400,7 @@ func detectDimensionsByService(resource *tagsData, fullMetricsList *cloudwatch.L
 	}
 	arnParsed, err := arn.Parse(resourceArn)
 
-	if err != nil &&  service != "tgwa"  {
+	if err != nil &&  service != "tgwa" && service!= "ebs" {
 		log.Warningf("Unable to parse ARN (%s) on %s due to %v", resourceArn, service, err)
 		return dimensions
 	}
@@ -413,7 +413,6 @@ func detectDimensionsByService(resource *tagsData, fullMetricsList *cloudwatch.L
 		"appsync":  {Key: "GraphQLAPIId", Prefix: "apis/"},
 		"asg":      {Key: "AutoScalingGroupName", Prefix: "autoScalingGroupName/"},
 		"dynamodb": {Key: "TableName", Prefix: "table/"},
-		"ebs":      {Key: "VolumeId", Prefix: "volume/"},
 		"ec":       {Key: "CacheClusterId", Prefix: "cluster:"},
 		"ec2":      {Key: "InstanceId", Prefix: "instance/"},
 		"efs":      {Key: "FileSystemId", Prefix: "file-system/"},
@@ -497,6 +496,8 @@ func detectDimensionsByService(resource *tagsData, fullMetricsList *cloudwatch.L
 	case "wafv2":
 		aclId := strings.Split(resourceArn, "/")[2]
 		dimensions = append(dimensions, buildDimension("WebACL", aclId))
+	case "ebs":
+		dimensions = append(dimensions, buildDimension("VolumeId",resourceArn ))
 	default:
 		log.Fatal("Not implemented cloudwatch metric: " + service)
 	}

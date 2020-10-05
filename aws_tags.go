@@ -94,7 +94,10 @@ func (iface tagsInterface) get(job job, region string) (resources []*tagsData, e
 		return iface.getTaggedTransitGatewayAttachments(job, region)
 	case "ec2Spot":
 		return iface.getTaggedEC2SpotInstances(job, region)
+	case "ebs":
+		return iface.getTaggedEBSVolumes(job, region)
 	}
+
 
 	allResourceTypesFilters := map[string][]string{
 		"alb":                   {"elasticloadbalancing:loadbalancer/app", "elasticloadbalancing:targetgroup"},
@@ -102,7 +105,7 @@ func (iface tagsInterface) get(job job, region string) (resources []*tagsData, e
 		"appsync":               {"appsync"},
 		"cf":                    {"cloudfront"},
 		"dynamodb":              {"dynamodb:table"},
-		"ebs":                   {"ec2:volume"},
+		//"ebs":                   {"ec2:volume"},
 		"ec":                    {"elasticache:cluster"},
 		"ec2":                   {"ec2:instance"},
 		"ecs-svc":               {"ecs:cluster", "ecs:service"},
@@ -330,6 +333,36 @@ func (iface tagsInterface) getTaggedEC2SpotInstances(job job, region string) (re
 				resource.Region = &region
 
 				for _, t := range ec2Spot.Tags {
+					resource.Tags = append(resource.Tags, &tag{Key: *t.Key, Value: *t.Value})
+				}
+
+				if resource.filterThroughTags(job.SearchTags) {
+					resources = append(resources, &resource)
+				}
+			}
+			return pageNum < 100
+		})
+}
+func (iface tagsInterface) getTaggedEBSVolumes(job job, region string) (resources []*tagsData, err error) {
+	ctx := context.Background()
+	pageNum := 0
+	return resources, iface.ec2Client.DescribeVolumesPagesWithContext(ctx, &ec2.DescribeVolumesInput{},
+		func(page *ec2.DescribeVolumesOutput, more bool) bool {
+			pageNum++
+			ec2APICounter.Inc()
+
+			for _, ebs := range page.Volumes{
+				resource := tagsData{}
+
+				if len(ebs.Attachments) > 0 {
+					resource.Tags = append(resource.Tags, &tag{Key: "instanceId", Value: *ebs.Attachments[0].InstanceId})
+				}
+
+				resource.ID = aws.String(fmt.Sprintf("%s", *ebs.VolumeId))
+				resource.Service = &job.Type
+				resource.Region = &region
+
+				for _, t := range ebs.Tags {
 					resource.Tags = append(resource.Tags, &tag{Key: *t.Key, Value: *t.Value})
 				}
 
