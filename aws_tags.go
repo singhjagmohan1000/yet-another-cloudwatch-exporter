@@ -38,7 +38,7 @@ type tagsInterface struct {
 	apiGatewayClient apigatewayiface.APIGatewayAPI
 	ec2Client        ec2iface.EC2API
 	elbv2Client      elbv2.ELBV2
-	elastictranscoderClient        elastictranscoderiface.ElasticTranscoderAPI
+	estranClient     elastictranscoderiface.ElasticTranscoderAPI
 }
 
 func createSession(roleArn string, config *aws.Config) *session.Session {
@@ -70,8 +70,8 @@ func createEC2Session(region *string, roleArn string) ec2iface.EC2API {
 	return ec2.New(createSession(roleArn, config), config)
 }
 func createElasticTranscoderSession(region *string, roleArn string) elastictranscoderiface.ElasticTranscoderAPI {
-	maxEC2APIRetries := 10
-	config := &aws.Config{Region: region, MaxRetries: &maxEC2APIRetries}
+	maxElasticTranscoderAPIRetries := 10
+	config := &aws.Config{Region: region, MaxRetries: &maxElasticTranscoderAPIRetries}
 	return elastictranscoder.New(createSession(roleArn, config), config)
 }
 func createAPIGatewaySession(region *string, roleArn string) apigatewayiface.APIGatewayAPI {
@@ -380,28 +380,20 @@ func (iface tagsInterface) getTaggedEBSVolumes(job job, region string) (resource
 			return pageNum < 100
 		})
 }
-func (iface tagsInterface) getElasticTranscoder(job job, region string) (resources []*tagsData, err error) {
+func (iface tagsInterface) getElasticTrancoder(job job, region string) (resources []*tagsData, err error) {
 	ctx := context.Background()
 	pageNum := 0
-	return resources, iface.elastictranscoderClient.ListPipelinesPagesWithContext(ctx, &elastictranscoderClient.ListPipelinesInput{},
-		func(page *elastictranscoderClient.ListPipelinesOutput, more bool) bool {
+	return resources, iface.estranClient.ListPipelinesPagesWithContext(ctx, &elastictranscoder.ListPipelinesInput{},
+		func(page *elastictranscoder.ListPipelinesOutput, more bool) bool {
 			pageNum++
 			//ec2APICounter.Inc()
 
-			for _, elastictranscoder := range page.Pipelines{
+			for _, etc := range page.Pipelines{
 				resource := tagsData{}
-
-				resource.ID = aws.String(fmt.Sprintf("%s", *elastictranscoderClient.VolumeId))
+				resource.ID = aws.String(fmt.Sprintf("%s", *etc.Id))
 				resource.Service = &job.Type
 				resource.Region = &region
-
-				for _, t := range elastictranscoderClient.Tags {
-					resource.Tags = append(resource.Tags, &tag{Key: *t.Key, Value: *t.Value})
-				}
-
-				if resource.filterThroughTags(job.SearchTags) {
-					resources = append(resources, &resource)
-				}
+				resources = append(resources, &resource)
 			}
 			return pageNum < 100
 		})

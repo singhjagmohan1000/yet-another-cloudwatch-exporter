@@ -395,9 +395,8 @@ func queryAvailableDimensions(resource string, namespace *string, fullMetricsLis
 func detectDimensionsByService(resource *tagsData, fullMetricsList *cloudwatch.ListMetricsOutput) (dimensions []*cloudwatch.Dimension) {
 	resourceArn := *resource.ID
 	service := *resource.Service
-	if service == "ec2Spot" {
+	if service == "elastictranscoder" || service == "ec2Spot"{
 		return dimensions
-
 	}
 	arnParsed, err := arn.Parse(resourceArn)
 
