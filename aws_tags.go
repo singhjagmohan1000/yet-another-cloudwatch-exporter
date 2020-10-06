@@ -15,6 +15,8 @@ import (
 	"github.com/aws/aws-sdk-go/service/autoscaling/autoscalingiface"
 	"github.com/aws/aws-sdk-go/service/ec2"
 	"github.com/aws/aws-sdk-go/service/ec2/ec2iface"
+	"github.com/aws/aws-sdk-go/service/elastictranscoder"
+	"github.com/aws/aws-sdk-go/service/elastictranscoder/elastictranscoderiface"
 	"github.com/aws/aws-sdk-go/service/elbv2"
 	r "github.com/aws/aws-sdk-go/service/resourcegroupstaggingapi"
 	"github.com/aws/aws-sdk-go/service/resourcegroupstaggingapi/resourcegroupstaggingapiiface"
@@ -36,6 +38,7 @@ type tagsInterface struct {
 	apiGatewayClient apigatewayiface.APIGatewayAPI
 	ec2Client        ec2iface.EC2API
 	elbv2Client      elbv2.ELBV2
+	elastictranscoderClient        elastictranscoderiface.ElasticTranscoderAPI
 }
 
 func createSession(roleArn string, config *aws.Config) *session.Session {
@@ -66,7 +69,11 @@ func createEC2Session(region *string, roleArn string) ec2iface.EC2API {
 	config := &aws.Config{Region: region, MaxRetries: &maxEC2APIRetries}
 	return ec2.New(createSession(roleArn, config), config)
 }
-
+func createElasticTranscoderSession(region *string, roleArn string) elastictranscoderiface.ElasticTranscoderAPI {
+	maxEC2APIRetries := 10
+	config := &aws.Config{Region: region, MaxRetries: &maxEC2APIRetries}
+	return elastictranscoder.New(createSession(roleArn, config), config)
+}
 func createAPIGatewaySession(region *string, roleArn string) apigatewayiface.APIGatewayAPI {
 	sess, err := session.NewSession()
 	if err != nil {
@@ -96,9 +103,9 @@ func (iface tagsInterface) get(job job, region string) (resources []*tagsData, e
 		return iface.getTaggedEC2SpotInstances(job, region)
 	case "ebs":
 		return iface.getTaggedEBSVolumes(job, region)
+	case "elastictranscoder":
+		return iface.getElasticTrancoder(job, region)
 	}
-
-
 	allResourceTypesFilters := map[string][]string{
 		"alb":                   {"elasticloadbalancing:loadbalancer/app", "elasticloadbalancing:targetgroup"},
 		"apigateway":            {"apigateway"},
@@ -363,6 +370,32 @@ func (iface tagsInterface) getTaggedEBSVolumes(job job, region string) (resource
 				resource.Region = &region
 
 				for _, t := range ebs.Tags {
+					resource.Tags = append(resource.Tags, &tag{Key: *t.Key, Value: *t.Value})
+				}
+
+				if resource.filterThroughTags(job.SearchTags) {
+					resources = append(resources, &resource)
+				}
+			}
+			return pageNum < 100
+		})
+}
+func (iface tagsInterface) getElasticTranscoder(job job, region string) (resources []*tagsData, err error) {
+	ctx := context.Background()
+	pageNum := 0
+	return resources, iface.elastictranscoderClient.ListPipelinesPagesWithContext(ctx, &elastictranscoderClient.ListPipelinesInput{},
+		func(page *elastictranscoderClient.ListPipelinesOutput, more bool) bool {
+			pageNum++
+			//ec2APICounter.Inc()
+
+			for _, elastictranscoder := range page.Pipelines{
+				resource := tagsData{}
+
+				resource.ID = aws.String(fmt.Sprintf("%s", *elastictranscoderClient.VolumeId))
+				resource.Service = &job.Type
+				resource.Region = &region
+
+				for _, t := range elastictranscoderClient.Tags {
 					resource.Tags = append(resource.Tags, &tag{Key: *t.Key, Value: *t.Value})
 				}
 

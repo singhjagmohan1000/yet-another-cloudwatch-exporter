@@ -264,6 +264,7 @@ func getNamespace(service string) (string, error) {
 		"vpn":                   "AWS/VPN",
 		"wafv2":                 "AWS/WAFV2",
 		"ec2Spot":               "AWS/EC2Spot",
+		"elastictranscoder":     "AWS/ElasticTranscoder",
 	}
 	if ns, ok = namespaces[service]; !ok {
 		return "", errors.New("Not implemented namespace for cloudwatch metric: " + service)

@@ -61,6 +61,7 @@ var (
 		"vpn",
 		"wafv2",
 		"ec2Spot",
+		"elastictranscoder",
 	}
 
 	config = conf{}
