@@ -42,6 +42,7 @@ func scrapeAwsData(config conf) ([]*tagsData, []*cloudwatchData) {
 						ec2Client:        createEC2Session(&region, roleArn),
 						elbv2Client:      createELBV2Session(&region, roleArn),
 						estranClient:     createElasticTranscoderSession(&region, roleArn),
+						sqsClient:        createSQSSession(&region, roleArn),
 					}
 					var resources []*tagsData
 					var metrics []*cloudwatchData

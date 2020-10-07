@@ -17,6 +17,8 @@ import (
 	"github.com/aws/aws-sdk-go/service/ec2/ec2iface"
 	"github.com/aws/aws-sdk-go/service/elastictranscoder"
 	"github.com/aws/aws-sdk-go/service/elastictranscoder/elastictranscoderiface"
+	"github.com/aws/aws-sdk-go/service/sqs"
+	"github.com/aws/aws-sdk-go/service/sqs/sqsiface"
 	"github.com/aws/aws-sdk-go/service/elbv2"
 	r "github.com/aws/aws-sdk-go/service/resourcegroupstaggingapi"
 	"github.com/aws/aws-sdk-go/service/resourcegroupstaggingapi/resourcegroupstaggingapiiface"
@@ -39,6 +41,7 @@ type tagsInterface struct {
 	ec2Client        ec2iface.EC2API
 	elbv2Client      elbv2.ELBV2
 	estranClient     elastictranscoderiface.ElasticTranscoderAPI
+	sqsClient        sqsiface.SQSAPI
 }
 
 func createSession(roleArn string, config *aws.Config) *session.Session {
@@ -74,6 +77,11 @@ func createElasticTranscoderSession(region *string, roleArn string) elastictrans
 	config := &aws.Config{Region: region, MaxRetries: &maxElasticTranscoderAPIRetries}
 	return elastictranscoder.New(createSession(roleArn, config), config)
 }
+func createSQSSession(region *string, roleArn string) sqsiface.SQSAPI {
+	maxSQSAPIRetries := 10
+	config := &aws.Config{Region: region, MaxRetries: &maxSQSAPIRetries}
+	return sqs.New(createSession(roleArn, config), config)
+}
 func createAPIGatewaySession(region *string, roleArn string) apigatewayiface.APIGatewayAPI {
 	sess, err := session.NewSession()
 	if err != nil {
@@ -105,6 +113,8 @@ func (iface tagsInterface) get(job job, region string) (resources []*tagsData, e
 		return iface.getTaggedEBSVolumes(job, region)
 	case "elastictranscoder":
 		return iface.getElasticTrancoder(job, region)
+	case "sqs":
+		return iface.getAllSQSQueues(job, region)
 	}
 	allResourceTypesFilters := map[string][]string{
 		"alb":                   {"elasticloadbalancing:loadbalancer/app", "elasticloadbalancing:targetgroup"},
@@ -133,7 +143,7 @@ func (iface tagsInterface) get(job job, region string) (resources []*tagsData, e
 		"s3":                    {"s3"},
 		"sfn":                   {"states"},
 		"sns":                   {"sns"},
-		"sqs":                   {"sqs"},
+		//"sqs":                   {"sqs"},
 		"tgw":                   {"ec2:transit-gateway"},
 		"vpn":                   {"ec2:vpn-connection"},
 		"kafka":                 {"kafka:cluster"},
@@ -394,6 +404,34 @@ func (iface tagsInterface) getElasticTrancoder(job job, region string) (resource
 				resource.Service = &job.Type
 				resource.Region = &region
 				resources = append(resources, &resource)
+			}
+			return pageNum < 100
+		})
+}
+func (iface tagsInterface) getAllSQSQueues(job job, region string) (resources []*tagsData, err error) {
+	ctx := context.Background()
+	pageNum := 0
+	return resources, iface.sqsClient.ListQueuesPagesWithContext(ctx, &sqs.ListQueuesInput{},
+		func(page *sqs.ListQueuesOutput, more bool) bool {
+			pageNum++
+			//ec2APICounter.Inc()
+
+			for _, queue := range page.QueueUrls{
+				resource := tagsData{}
+
+
+				parts := strings.Split(*queue, "/")
+				resource.ID = aws.String(fmt.Sprintf("arn:aws:sqs:us-west-2:80398EXAMPLE:%s", parts[4]))
+				resource.Service = &job.Type
+				resource.Region = &region
+
+				//for _, t := range queue.Tags {
+				//	resource.Tags = append(resource.Tags, &tag{Key: *t.Key, Value: *t.Value})
+				//}
+				resources = append(resources, &resource)
+				//if resource.filterThroughTags(job.SearchTags) {
+				//	resources = append(resources, &resource)
+				//}
 			}
 			return pageNum < 100
 		})
